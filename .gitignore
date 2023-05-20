@@ -1,1 +1,6 @@
 Code/*.json
+*.pyc
+
+# ignored due to size limit
+torch_cpu.dll
+dnnl.lib
