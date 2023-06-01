@@ -21,7 +21,6 @@ class Board:
         if seed:
             np.random.seed(seed)
         self.board = np.concatenate([self.generate_board() for i in np.arange(board_num)], axis=1)
-        self.move_dict = {}
 
         # Use numpy.indices to create a matrix of row/column indices for each cell
         a = np.indices((self.size, self.size * board_num))
@@ -30,7 +29,17 @@ class Board:
 
         # Add ID matrix to the main board
         self.board = np.dstack((self.board, self.id_matrix))
+        
+        # Incase the original board is unerasable.
+        while not self.get_info()[1]:
+            self.board = np.concatenate([self.generate_board() for i in np.arange(board_num)], axis=1)
+
+            a = np.indices((self.size, self.size * board_num))
+            self.id_matrix = np.apply_along_axis(lambda x: f'r{x[1]:04d}c{x[0]:04d}', 0, a)
+
+            self.board = np.dstack((self.board, self.id_matrix))
         self.times = {'get_info':0, 'eliminate':0, 'falling':0, 'check':0}
+        
 
     @property
     def mainboard(self):
@@ -205,7 +214,7 @@ class Board:
             if to_eliminate[coord[0], coord[1]] == 1:
                 continue
             head = 0
-            connected = [coord, ]
+            connected = np.array([coord])
             while head < len(connected):
                 current = connected[head]
                 to_eliminate[current[0], current[1]] = 1
@@ -213,9 +222,10 @@ class Board:
                     neighbor = current + d
                     if (neighbor < 0).any() or (neighbor >= self.size).any():
                         continue
+
                     if (arr[neighbor[0], neighbor[1]] == arr[current[0], current[1]]
-                        and to_eliminate[neighbor[0], neighbor[1]] == 0):
-                        connected.append(neighbor)
+                            and to_eliminate[neighbor[0], neighbor[1]] == 0) and not (connected == [neighbor]).all(1).any():
+                        connected = np.concatenate((connected, [neighbor]))
                 head += 1
             score += func(len(connected))
 
@@ -227,8 +237,8 @@ class Board:
                 continue
             col = self.board[i]
             self.board[i, :col_remained[i]] = col[:self.size][to_eliminate[i] == 0]
-            self.board[i, col_remained[i]:N_ROWS-col_eliminated[i]] = col[self.size:]
-            self.board[i, N_ROWS-col_eliminated[i]:] = 'nan'
+            self.board[i, col_remained[i]:N_ROWS - col_eliminated[i]] = col[self.size:]
+            self.board[i, N_ROWS - col_eliminated[i]:] = 'nan'
 
         # Return the total score and the number of columns eliminated
         return score, col_eliminated

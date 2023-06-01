@@ -21,9 +21,16 @@ class Game_play():
         ----------
         player_1, player_2: the player's code
         '''
-        self.players = (Player_safe(player_1.Plaser(False)),
-                Player_safe(player_2.Plaser(True)))
+        self.players = (Player_safe(player_1.Plaser, False),
+                Player_safe(player_2.Plaser, True))
         self.terminated = False
+        if not self.players[0].error:
+            self.players[0].core.move_history = []
+            self.players[0].core.used_time = [0, 0]
+        if not self.players[1].error:
+            self.players[1].core.move_history = []
+            self.players[1].core.used_time = [0, 0]
+        
         # the players are wrapped by exception_manager.py
         self.board = Board(seed=seed) if board is None else board
         self.remained_blocks = np.full(BOARD_SIZE, N_ROWS - BOARD_SIZE - 2)
@@ -52,7 +59,8 @@ class Game_play():
         data = {'totalScores': self.score[side],
                 'highestCombo': self.high_combo[side],
                 'currentCombo': self.current_combo[side],
-                'status': a + b}
+                'status': a + b,
+                'totalTime': self.players[side].time}
         return data
 
     @property
@@ -72,6 +80,10 @@ class Game_play():
             return
         if (self.board.mainboard == 'nan').any():
             self.terminated = True
+        info = self.board.get_info()
+        if not info[1]:
+            self.terminated = True
+            return
 
         # update turn data
         self.turn += 1
@@ -81,7 +93,7 @@ class Game_play():
         self.current_combo[side] = 0
 
         # make a move for the current player
-        mv = self.ask_for_move(current_player)
+        mv = self.ask_for_move(current_player, info)
         if current_player.error is not None:
             self.terminated = True
             self.replay['winner'] = 1 - side
@@ -90,6 +102,9 @@ class Game_play():
             return
 
         self.board.change(*mv)
+        self.players[0].core.move_history.append(mv)
+        self.players[1].core.move_history.append(mv)
+        self.players[0].core.used_time[side] = self.players[1].core.used_time[1-side] = self.players[side].time
         self.record_frame()
 
         # eliminating blocks
@@ -105,13 +120,13 @@ class Game_play():
 
             self.record_frame()
 
-    def ask_for_move(self, player):
+    def ask_for_move(self, player, info):
         '''
         Given current board, get a move from the current player
         Returns: ((x1, y1), (x2, y2))
         '''
         score = self.score if self.turn % 2 == 0 else self.score[::-1]
-        return player('move', *self.board.get_info(), score, (self.turn+1)//2)
+        return player('move', *info, score.copy(), (self.turn+1)//2)
 
     def record_frame(self):
         '''
@@ -153,11 +168,15 @@ class Game_play():
                                 'right': history[:, 1],
                                 'relative': history[:, 1] - history[:, 0]}
         self.replay['length'] = self.turn
+        self.replay['time'] = [self.players[0].time, self.players[1].time]
 
         if self.replay['errorStatus'] == -1:
             self.replay['extra'] = abs(self.score[0] - self.score[1])
             if self.turn < 2 * MAX_TURN:
-                self.replay['reason'] = 'Run out of blocks'
+                if (self.board.mainboard == 'nan').any():
+                    self.replay['reason'] = 'Run out of blocks'
+                else:
+                    self.replay['reason'] = 'No eraserable moves'
             else:
                 self.replay['reason'] = 'Reach the maximum turn number'
         else:
@@ -179,13 +198,11 @@ class Game_play():
                 'length': self.turn,
                 'score': 1000,
                 'reason': None,
-                'order': self.replay['order']}
+                'order': self.replay['order'],
+                'time': [self.players[0].time, self.players[1].time]}
         if self.replay['errorStatus'] == -1:
             log['score'] = abs(self.score[0] - self.score[1])
-            if self.turn < 2 * MAX_TURN:
-                log['reason'] = 'Run out of blocks'
-            else:
-                log['reason'] = 'Reach turn limit'
+            log['reason'] = self.replay['reason']
         else:
             log['reason'] = 'An error occurred: '
             log['errorMessage'] = self.replay['errorMessage'].split('\n')[-2]
