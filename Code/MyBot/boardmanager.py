@@ -110,7 +110,7 @@ class BoardManager:
         
         return fullboard
     
-    def _erase(self, board: np.ndarray, pos: vec2, erased=0) -> tuple[np.ndarray, int]:
+    def _erase(self, board: np.ndarray, pos: vec2, erased=0) -> [np.ndarray, int]:
         target = board[pos]
         board[pos] = NA
         erased += 1
@@ -264,9 +264,9 @@ class BoardManager:
         return root.operation
     
     @staticmethod
-    def _convert(operation: Operation) -> tuple[tuple, tuple]:
+    def _convert(operation: Operation, availables: list[ [tuple, tuple] ]) -> [tuple, tuple]:
         # print(f"{operation = }")
-        return (
+        operation = (
             (
                 operation.pos1.x, 
                 operation.pos1.y
@@ -276,9 +276,43 @@ class BoardManager:
                 operation.pos2.y
             )
         )
+        if operation in availables:
+            return operation
+        else:
+            return operation[::-1]
+    
+    @staticmethod
+    def _pack_operation(t: [tuple, tuple]) -> Operation:
+        return Operation(
+            vec2(*t[0]), 
+            vec2(*t[1])
+        )
+    
+    def _perform_onestep_best(self, board: np.ndarray, availables: list[tuple[tuple, tuple]]) -> Optional[tuple[tuple, tuple]]:
+        onesteps = []
+        targetboard = board[:BOARDSIZE.x, :BOARDSIZE.x]
+        for available in availables:
+            operation = self._pack_operation(available)
+            
+            board1, erased1 = self._erase(targetboard.copy(), operation.pos1)
+            onesteps.append(
+                ScoredBoard([], [], self._heuristic(erased1), board1, operation)
+            )
+            
+            board2, erased2 = self._erase(targetboard.copy(), operation.pos2)
+            onesteps.append(
+                ScoredBoard([], [], self._heuristic(erased2), board2, operation)
+            )
+        
+        onesteps.sort(key=lambda x: x.score, reverse=True)
+        # print(f"\n{onesteps[:2] = }\n")
+        # print(f"\n{availables = }\n")
+        best = self._convert( onesteps[0].operation, availables )
+        
+        return best
     
     random = __import__("random")
-    def _perform_random(self, availables: list[tuple[tuple, tuple]]):
+    def _random(self, availables: list[ [tuple, tuple] ]) -> [tuple, tuple]:
         # print("\n  Random\n")
         return self.random.choice(availables)
     
@@ -291,15 +325,15 @@ class BoardManager:
             self._run()
             
             operation = self._traceback()
-            operation = self._convert(operation)
+            operation = self._convert(operation, availables)
             
-            if operation in availables:
-                return operation
-            else:
-                return operation[::-1]
+            return operation
+            
         except AttributeError:
-            return self._perform_random(availables)
-    
+            onestep_best = self._perform_onestep_best(self.scoreboards[0][0].board, availables)
+            if onestep_best:
+                return onestep_best
+            return self._random(availables)
     
     
     
