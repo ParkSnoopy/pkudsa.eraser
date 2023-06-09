@@ -288,7 +288,7 @@ class BoardManager:
             vec2(*t[1])
         )
     
-    def _perform_onestep_best(self, board: np.ndarray, availables: list[tuple[tuple, tuple]]) -> Optional[tuple[tuple, tuple]]:
+    def _perform_onestep_best(self, board: np.ndarray, availables: list[tuple[tuple, tuple]]) -> [tuple, tuple]:
         onesteps = []
         targetboard = board[:BOARDSIZE.x, :BOARDSIZE.x]
         for available in availables:

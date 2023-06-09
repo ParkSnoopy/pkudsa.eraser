@@ -1,41 +1,17 @@
 import numpy as np
-from time import perf_counter
-
-# 为了以 x y 形式使用坐标，而不以 [0] [1] 形式使用，这里定义 vec2
 from collections import namedtuple
+from time import perf_counter
 vec2 = namedtuple("vec2", ("x", "y"))
-
-# Operation 是包含两个 vec2 对象的 tuple
-# 表示 将 pos1 的物体移动到 pos2 的操作
 Operation = namedtuple("Operation", ("pos1", "pos2"))
-
 class Pattern:
-    """
-    包含
-    pattern  ：可以进行操作的样板
-    operation：上面 pattern 对应的操作（什么操作可以将上面的 pattern 消除）
-    """
     def __init__(self, pattern, operation):
         self.pattern = pattern
         self.operation = operation
-
-# 消除的标记为 NA，现在是 0
 NA = 0
-
-# 原来定义了探索的深度，后来用全部时间，尽量深地探索，deprecated
 LEVEL = 1200//6
-
-# 要演示的 Board 的大小
 BOARDSIZE = vec2(6, 6*LEVEL)
-
-# 为了下面 Pattern 定义方便，array=np.array
 array = np.array
-
-# 所有可以操作的 Pattern
-#
-# key  ：Pattern 的大小
-# value：Pattern 的集合
-PATTERNS: dict[vec2: set] = {
+PATTERNS: dict[vec2: set] = {#设定合法的移动集合
     vec2(3, 2): {
         # RIGHT
         Pattern(
@@ -221,23 +197,7 @@ PATTERNS: dict[vec2: set] = {
         ), 
     }, 
 }
-def direction(boardshape: vec2, pos: vec2):
-    """
-    探索所有可以连消的方向的函数
-
-    Parameters
-    ----------
-    boardshape : vec2
-        要消除的 Board 大小（ 一般是 vec2(6,6) ）.
-    pos : vec2
-        当前的位置.
-
-    Returns
-    -------
-    base : set[vec2]
-        所有可以移动的方向（如果 pos 是 vec(0,0)，boardshape 是 vec(6,6) 的话，返回 { vec2(1,0), vec2(0,1) }.
-
-    """
+def direction(boardshape: vec2, pos: vec2):#移动操作
     base = {
         vec2( 1,  0), 
         vec2(-1,  0), 
@@ -262,24 +222,7 @@ def direction(boardshape: vec2, pos: vec2):
         )
     return base
 
-def direction_conn(boardshape: vec2, pos: vec2, connectivity: int):
-    """
-    （标记用的函数，之查找 右、下 方向）为了发现相邻可以移动的样板，查找所有 x y 轴相邻 以及 对角方向相邻
-
-    Parameters
-    ----------
-    boardshape : vec2
-    pos : vec2
-        （与 direction 中的 boardshape 和 pos 相同）.
-    connectivity : int
-        连接程度（=1：直角方向的连接；=2：包括对角方向的连接）.
-
-    Returns
-    -------
-    base : set[vec2]
-        （与 direction 相同）.
-
-    """
+def direction_conn(boardshape: tuple, pos: tuple, connectivity: int):#移动操作的连接
     base = {
         vec2(-1,  0), 
         vec2( 0, -1), 
@@ -322,26 +265,8 @@ def direction_conn(boardshape: vec2, pos: vec2, connectivity: int):
             vec2(0, -1)
         )
     return base
-
-class ScoredBoard:
-    """
-    保存 Board 与其 状态
-    """
+class ScoredBoard:#计分板
     def __init__(self, select_hist, score_hist, score, board, operation):
-        """
-        Parameters
-        ----------
-        select_hist : list
-            到达这个 Board 的选择历史.
-        score_hist : list
-            到达这个 Board 的分数历史.
-        score : int
-            当前自己的分数.
-        board : np.ndarray
-            游戏盘.
-        operation : Operation
-            从上一个 Board 到这个 Board 需要进行的操作.
-        """
         self.select_hist = select_hist
         self.score_hist = score_hist
         self.score = score
@@ -349,21 +274,13 @@ class ScoredBoard:
         self.operation = operation
     def __repr__(self):
         return f"ScoreBoard(\nselect_hist={self.select_hist}, \nscore_hist={self.score_hist}, \nscore={self.score}, \nboard=\n{self.board}, \noperation=\n{self.operation}\n)"
-
 class Plaser:
-    """
-    角色
-    
-    主要缺陷：不能模拟连消（一次消除以后，不能识别 还可以消除的状态）
-              （时间紧迫，暂时放弃实现了）
-    """
     
     def __init__(self, is_first: bool = None) -> None:
         self.is_first = is_first
     
-    # scoreboards：每个深度 所有可能性的 list
+    
     scoreboards: list[set[ScoredBoard]] = list()
-    # 转换 Board 中的元素（现在不用转换，但其他代码已经假设 int 写了，怕出现错误）
     mapper = {
         'R': 1, 
         'B': 2, 
@@ -373,9 +290,6 @@ class Plaser:
     }
     
     def _init(self, board, availables):
-        """
-        每次自己的顺序 进行的 init
-        """
         
         observation: np.ndarray = board[:BOARDSIZE.x, :BOARDSIZE.y]
         
@@ -397,23 +311,7 @@ class Plaser:
             ), 
         ]]
         
-    def _find_next_level(self, select: int, scoreboard: ScoredBoard) -> list[np.ndarray]:
-        """
-        查找下一个深度的所有可能性
-
-        Parameters
-        ----------
-        select : int
-            当前所有可能性中选择的 Board 序号.
-        scoreboard : ScoredBoard
-            要找 下一个深度 可能性的 Board 的 ScoredBoard.
-
-        Returns
-        -------
-        list[ScoredBoard]
-            当前选择的 Board 的所有下一个深度的可能性.
-
-        """
+    def _find_next_level(self, select: int, scoreboard: ScoredBoard) -> list[np.ndarray]:#遍历所有合法操作的结果
         fullboard = scoreboard.board
         board = fullboard[:BOARDSIZE.x, :BOARDSIZE.x]
         
@@ -423,28 +321,9 @@ class Plaser:
             self._move(select, scoreboard, board, operation) for operation in possibles
         ]
     
-    def _move(self, select: int, scoreboard: ScoredBoard, board: np.ndarray, operation: Operation) -> ScoredBoard:
-        """
-        返回 在 board 上进行 operation 操作的结果
-
-        Parameters
-        ----------
-        select : int
-            为了在新生成的 ScoredBoard 中记录当前历史.
-        scoreboard : ScoredBoard
-            为了在新生成的 ScoredBoard 中记录以前历史.
-        board : np.ndarray
-            目标的 Board.
-        operation : Operation
-            进行的操作.
-
-        Returns
-        -------
-        ScoredBoard
-            在 board 上进行 operation 操作的结果 的 ScoredBoard.
-
-        """
-        pos1, pos2 = operation.pos1, operation.pos2
+    def _move(self, select: int, scoreboard: ScoredBoard, board: np.ndarray, operation: Operation):#移动操作
+        operation, pattern = operation # DEBUG
+        pos1, pos2 = operation
         
         new = board.copy()
         
@@ -466,22 +345,6 @@ class Plaser:
         )
     
     def _update_fullboard(self, fullboard: np.ndarray, board: np.ndarray):
-        """
-        将 6x1200 的 Board 信息更新
-
-        Parameters
-        ----------
-        fullboard : np.ndarray
-            6x1200 的棋盘.
-        board : np.ndarray
-            消除操作以后的 6x6 棋盘.
-
-        Returns
-        -------
-        fullboard : TYPE
-            将所有消除元素以后的空间填满以后的 6x1200 棋盘.
-
-        """
         fullboard = fullboard.copy()
         fullboard[:BOARDSIZE.x, :BOARDSIZE.x] = board
         
@@ -497,27 +360,7 @@ class Plaser:
         
         return fullboard
     
-    def _erase(self, board: np.ndarray, pos: vec2, erased=0) -> [np.ndarray, int]:
-        """
-        递归消除相邻的相同元素
-
-        Parameters
-        ----------
-        board : np.ndarray
-            6x6 的主棋盘.
-        pos : vec2
-            消除开始的位置（一般是 Operation.pos2）.
-        erased : int, optional
-            使用者不用输入，递归时使用，指当前以消除的个数.
-
-        Returns
-        -------
-        board : np.ndarray
-            元素消除以后标记为 NA 的 6x6 的主棋盘.
-        erased : int
-            消除的元素个数.
-
-        """
+    def _erase(self, board: np.ndarray, pos: vec2, erased=0) -> [np.ndarray, int]:#构建消除方法
         target = board[pos]
         board[pos] = NA
         erased += 1
@@ -530,21 +373,7 @@ class Plaser:
                 board, erased = self._erase(board, newpos, erased=erased)
         return board, erased
         
-    def _find_possible(self, board: np.ndarray) -> list[Operation]:
-        """
-        查找当前可以操作的所有 Operation
-
-        Parameters
-        ----------
-        board : np.ndarray
-            6x6 主棋盘.
-
-        Returns
-        -------
-        list[Operation]
-            当前主棋盘能进行的所有操作.
-
-        """
+    def _find_possible(self, board: np.ndarray) -> list[Operation]:#得到合法操作
         labeled = self._label(board, connectivity=2)
         
         clustered_indexes = [
@@ -556,22 +385,6 @@ class Plaser:
         return self._filter_possible(clustered_indexes)
     
     def _label(self, board: np.ndarray, connectivity: int) -> np.ndarray:
-        """
-        标记 6x6 主棋盘的相邻元素
-
-        Parameters
-        ----------
-        board : np.ndarray
-            6x6 主棋盘
-        connectivity : int
-            连接度.
-
-        Returns
-        -------
-        new : np.ndarray
-            标记后的 6x6 主棋盘.
-
-        """
         no = 1
         boardshape = vec2(*board.shape)
         new = np.zeros(boardshape, dtype=np.int8)
@@ -595,22 +408,7 @@ class Plaser:
             new = new + is_element
         return new
     
-    def _filter_possible(self, clustered_indexes: list[np.ndarray, np.ndarray]) -> list[Operation]:
-        """
-        （有点复杂啰嗦的函数，没时间简化了）
-        输入 所有标记（ _label() ）的信息，过滤可以进行操作的部分，输出对应操作
-
-        Parameters
-        ----------
-        clustered_indexes : list[np.ndarray, np.ndarray]
-            所有标记（ _label() 返回信息的基本加工 ）的信息.
-
-        Returns
-        -------
-        list[Operation]
-            根据 PATTERNS 过滤出的所有可以进行操作的部分，对应的 Operation （ 需要把哪里的元素移到哪里 的操作 ）.
-
-        """
+    def _filter_possible(self, clustered_indexes: list[np.ndarray, np.ndarray]) -> list[Operation]:#运行各个合法的操作
         possibles = []
         for i, clustered_index in enumerate(clustered_indexes):
             if self.halt:
@@ -667,32 +465,39 @@ class Plaser:
         return possibles
     
     def _heuristic(self, erased: int) -> int:
-        """
-        将 消除的元素个数转换成分数
-
-        Parameters
-        ----------
-        erased : int
-            消除的元素个数.
-
-        Returns
-        -------
-        int
-            对应的分数.
-
-        """
         return ( erased - 2 ) ** 2
     
-    def _traceback(self) -> Operation:
-        """
-        查找最好的操作，返回第一次进行的操作
-
-        Returns
-        -------
-        Operation
-            为了达到当前棋盘，第一次需要进行的操作.
-
-        """
+    def _run(self):
+        self.halt = False
+        self.level = -1
+        while ( not self.halt ):
+            if self.scoreboards[ self.level + 1 ] == []:
+                # print("\n  Stopped because No Effective Action to Perform\n")
+                break
+            self.level += 1
+            
+            self.scoreboards.append( list() )
+            
+            for select, scoreboard in enumerate( self.scoreboards[self.level] ):
+                self.scoreboards[ self.level + 1 ].extend(
+                    self._find_next_level(select, scoreboard)
+                )
+            
+            self.scoreboards[ self.level + 1 ] = sorted(
+                self.scoreboards[ self.level + 1 ], 
+                key=lambda scoreboard: sum(scoreboard.score_hist), 
+                reverse=True
+            )[:( -1 if self.level % 2 else 1)]
+            
+            # print(f"  Level {self.level:02d} -> {self.level+1:02d} :: Time consumed : {perf_counter()-self.t0:.6f} seconds")
+            
+            if ( ( perf_counter() - self.t0 ) > .09 ):
+                self.halt = True
+        
+        if not self.scoreboards[ self.level + 1 ]:
+            self.scoreboards.pop(self.level + 1)
+    
+    def _traceback(self) -> Operation:#选择能够得到最高分的操作
         # print(f"\n{self.scoreboards = }\n")
         
         best: ScoredBoard = None
@@ -710,22 +515,7 @@ class Plaser:
     
     @staticmethod
     def _convert(operation: Operation, availables: list[ [tuple, tuple] ]) -> [tuple, tuple]:
-        """
-        将 Operation 转换成 pkudsa.eraser 能理解的形式
-
-        Parameters
-        ----------
-        operation : Operation
-            要转换的操作.
-        availables : list[ [tuple, tuple] ]
-            get_info() 返回的所有可能性.
-
-        Returns
-        -------
-        [tuple, tuple]
-            operation 转换成的 availables 中的一个.
-
-        """
+        # print(f"{operation = }")
         operation = (
             (
                 operation.pos1.x, 
@@ -743,43 +533,12 @@ class Plaser:
     
     @staticmethod
     def _pack_operation(t: [tuple, tuple]) -> Operation:
-        """
-        将 get_info() 给出的 ((),()) 转换成 Operation 形式
-
-        Parameters
-        ----------
-        t : [tuple, tuple]
-            ((),()).
-
-        Returns
-        -------
-        Operation
-            对应的操作.
-
-        """
         return Operation(
             vec2(*t[0]), 
             vec2(*t[1])
         )
     
-    def _perform_onestep_best(self, board: np.ndarray, availables: list[tuple[tuple, tuple]]) -> [tuple, tuple]:
-        """
-        （因为当前我的 Plaser 不完善，有时出现 bug）
-        出现异常时，进行 深度=1 的情况最好的结果
-
-        Parameters
-        ----------
-        board : np.ndarray
-            6x6 主棋盘.
-        availables : list[tuple[tuple, tuple]]
-            get_info() 给出的 所有可能性.
-
-        Returns
-        -------
-        [tuple, tuple]
-            一层深度 最好的结果.
-
-        """
+    def _perform_onestep_best(self, board: np.ndarray, availables: list[tuple[tuple, tuple]]):#执行得分最高的一步
         onesteps = []
         targetboard = board[:BOARDSIZE.x, :BOARDSIZE.x]
         for available in availables:
@@ -803,74 +562,12 @@ class Plaser:
         return best
     
     random = __import__("random")
-    def _random(self, availables: list[ [tuple, tuple] ]) -> [tuple, tuple]:
-        """
-        最后的最后，异常发生时，进行 random 的操作了
-
-        Parameters
-        ----------
-        availables : list[ [tuple, tuple] ]
-            get_info() 给出的 所有可能性.
-
-        Returns
-        -------
-        [tuple, tuple]
-            随机的一个.
-
-        """
+    def _random(self, availables: list[ [tuple, tuple] ]) -> [tuple, tuple]:#为防止超时，预备一个随机选择操作
+        # print("\n  Random\n")
         return self.random.choice(availables)
     
-    def _run(self):
-        """
-        到时间限制，模拟尽量深的结果
-        """
-        self.halt = False
-        self.level = -1
-        while ( not self.halt ):
-            if self.scoreboards[ self.level + 1 ] == []:
-                break
-            self.level += 1
-            
-            self.scoreboards.append( list() )
-            
-            for select, scoreboard in enumerate( self.scoreboards[self.level] ):
-                self.scoreboards[ self.level + 1 ].extend(
-                    self._find_next_level(select, scoreboard)
-                )
-            
-            self.scoreboards[ self.level + 1 ] = sorted(
-                self.scoreboards[ self.level + 1 ], 
-                key=lambda scoreboard: sum(scoreboard.score_hist), 
-                reverse=True
-            )[:( -1 if self.level % 2 else 1)]
-            
-            if ( ( perf_counter() - self.t0 ) > .09 ):
-                break
-        
-        if not self.scoreboards[ self.level + 1 ]:
-            self.scoreboards.pop(self.level + 1)
-    
     def move(self, board, availables, score, turn):
-        """
-        Game 叫出的函数
-
-        Parameters
-        ----------
-        board : TYPE
-            get_info()[0].
-        availables : TYPE
-            get_info()[1].
-        score : TYPE
-            （掉弃）.
-        turn : TYPE
-            （掉弃）.
-
-        Returns
-        -------
-        [tuple, tuple]
-            availables 中的一个.
-
-        """
+            # print(f"\n\nperforming {__name__}\n")
         try:
             self.t0 = perf_counter()
             
@@ -886,8 +583,4 @@ class Plaser:
             onestep_best = self._perform_onestep_best(self.scoreboards[0][0].board, availables)
             if onestep_best:
                 return onestep_best
-            
-            else:
-                return self._random(availables)
-        except:
             return self._random(availables)
