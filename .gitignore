@@ -1,2 +1,7 @@
 Code/*.json
 *.pyc
+
+
+*.png
+*.xmind
+*.docx
